@@ -1,0 +1,1706 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>時間割アプリ</title>
+  <meta name="description" content="。通知・保存・スマホ対応済み。">
+  <meta name="keywords" content="時間割,アプリ">
+  <meta name="theme-color" content="#4CAF50">
+  
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  
+
+<script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
+  
+  <style>
+    /* --- CSSカスタムプロパティ（CSS変数） --- */
+    :root {
+      /* ライトモードのデフォルトカラー */
+      --text-color: #333;
+      --border-color: #ccc;
+      --header-bg-color: #4CAF50;
+      --header-text-color: white;
+      --button-bg-color: #4CAF50;
+      --button-hover-bg-color: #45a049;
+      --secondary-button-bg-color: #f1f1f1;
+      --secondary-button-text-color: #333;
+      --secondary-button-hover-bg-color: #ddd;
+      
+      /* NEW: 透過度制御用の変数 */
+      --table-bg-color-opacity: 0.8; 
+      --settings-bg-color-rgb: 255, 255, 255; /* 設定パネルの基本RGB (ライトモード) */
+      --settings-bg-opacity: 0.6; 
+      
+      --empty-cell-bg-color: rgba(0, 0, 0, 0.1);
+
+      /* 科目カラー (デフォルトの固定カラー) */
+      --color-math: #ffe066;
+      --color-english: #ffd6a5;
+      --color-pe: #a0e7e5;
+      --color-science: #caffbf;
+      --color-japanese: #ffadad;
+      --color-selecta: #b5ead7;
+      --color-selectb: #c7ceea;
+      --color-politics: #fdfd96;
+      --color-history: #ffdac1;
+      --color-tech: #e2f0cb;
+      --color-lh: #d0f0fd;
+      --color-practice: #fbc4ab;
+    }
+
+    /* --- ダークモードのスタイル --- */
+    .dark-mode {
+      --text-color: #e0e0e0;
+      --border-color: #555;
+      --header-bg-color: #3f51b5; 
+      --header-text-color: white;
+      --button-bg-color: #3f51b5;
+      --button-hover-bg-color: #303f9f;
+      --secondary-button-bg-color: #616161;
+      --secondary-button-text-color: #e0e0e0;
+      --secondary-button-hover-bg-color: #757575;
+      --settings-bg-color-rgb: 40, 40, 40; /* 設定パネルの基本RGB (ダークモード) */
+      --empty-cell-bg-color: rgba(255, 255, 255, 0.1);
+    }
+
+    body {
+      font-family: sans-serif;
+      text-align: center;
+      padding: 20px;
+      background-size: cover;
+      background-repeat: no-repeat;
+      background-position: center center;
+      background-attachment: fixed;
+      transition: background-image 1s ease-in-out, background-color 0.5s ease-in-out, color 0.5s ease-in-out;
+      color: var(--text-color);
+      background-color: var(--body-fallback-bg, #f4f4f4); 
+    }
+    .dark-mode body {
+        background-color: var(--body-fallback-bg, #1e1e1e); 
+    }
+    
+    /* NEW: 背景のみ表示モード */
+    .background-only > *:not(script):not(style):not(audio):not(#exitBackgroundOnlyButton) { 
+        display: none !important;
+    }
+    .background-only {
+        padding: 0 !important;
+    }
+
+    /* NEW: 解除ボタンのスタイル */
+    #exitBackgroundOnlyButton {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000; /* 他の要素より手前に表示 */
+        background-color: rgba(255, 0, 0, 0.7);
+        color: white;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        line-height: 40px;
+        font-size: 24px;
+        font-weight: bold;
+        text-align: center;
+        padding: 0;
+        border: 2px solid white;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    }
+    #exitBackgroundOnlyButton:hover {
+        background-color: red;
+    }
+
+
+    /* Improvement: 初期ロード時のちらつき防止 */
+    .loading .table-section,
+    .loading .homework-section,
+    .loading .time-settings,
+    .loading .day-limit-settings,
+    .loading #bulkInputSection,
+    .loading .general-settings {
+        opacity: 0;
+        transition: opacity 0.5s;
+    }
+    body:not(.loading) .table-section,
+    body:not(.loading) .homework-section,
+    body:not(.loading) .time-settings,
+    body:not(.loading) .day-limit-settings,
+    body:not(.loading) #bulkInputSection,
+    body:not(.loading) .general-settings {
+        opacity: 1;
+    }
+
+    h1, h2 { color: var(--text-color); } 
+
+    /* NEW: 設定パネルの背景色をRGBと透過度変数で制御 */
+    .settings, .homework-section, .time-settings, .day-limit-settings, #bulkInputSection, .general-settings, #background-selection-section, .bulk-input-section {
+      margin-bottom: 10px; /* マージンを増やして見やすく */
+      background-color: rgba(var(--settings-bg-color-rgb), var(--settings-bg-opacity)); 
+      padding: 10px; /* パディングを増やして見やすく */
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      transition: background-color 0.5s ease-in-out, color 0.5s ease-in-out;
+    }
+    
+    /* NEW: アコーディオンヘッダーのスタイル */
+    .general-settings h2 {
+        cursor: pointer;
+        margin: -10px -10px 10px -10px; /* パネルのパディング分をネガティブマージンで吸収 */
+        padding: 10px; /* パディングを増やして見やすく */
+        background-color: var(--header-bg-color);
+        color: var(--header-text-color);
+        border-radius: 10px 10px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: background-color 0.3s;
+    }
+    .general-settings h2:hover {
+        opacity: 0.9;
+    }
+    .general-settings h2 span {
+        font-size: 1.2em;
+        transition: transform 0.3s;
+    }
+    .general-settings-content {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.5s ease-in-out;
+    }
+    .general-settings-content.active {
+        max-height: 10000px; /* 十分に大きな値 */
+    }
+    .general-settings h2.open span {
+        transform: rotate(180deg);
+    }
+    .dark-mode .general-settings h2 {
+        background-color: var(--header-bg-color); 
+    }
+
+    /* Time settings grid for better layout */
+    #period-times-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 10px;
+        margin-top: 10px;
+    }
+    .period-time-input {
+        border: 1px solid var(--border-color);
+        padding: 10px;
+        border-radius: 5px;
+        text-align: left;
+        background-color: transparent; /* パネル自体が背景を持つので透明に */
+    }
+
+    /* Day limit inputs */
+    .period-limits-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+    }
+    .period-limit-input {
+        border: 1px solid var(--border-color);
+        padding: 10px;
+        border-radius: 5px;
+        background-color: transparent; /* パネル自体が背景を持つので透明に */
+    }
+
+    /* Bulk Input Styles */
+    #bulkTextarea {
+        width: 98%;
+        min-height: 200px;
+        font-family: monospace;
+        font-size: 14px;
+        padding: 10px;
+        border: 1px solid var(--border-color);
+        box-sizing: border-box;
+        resize: vertical;
+        margin-top: 10px;
+        /* inputの背景も透過するように設定 */
+        background-color: rgba(var(--settings-bg-color-rgb), 0.7); 
+        color: var(--text-color); 
+    }
+    .secondary-button {
+        background-color: var(--secondary-button-bg-color);
+        color: var(--secondary-button-text-color);
+        border: 1px solid var(--border-color);
+        margin-left: 10px;
+    }
+    .secondary-button:hover {
+        background-color: var(--secondary-button-hover-bg-color);
+    }
+
+    table {
+      margin: 0 auto;
+      border-collapse: collapse;
+      width: 100%;
+      max-width: 800px;
+      background-color: rgba(255, 255, 255, var(--table-bg-color-opacity)); 
+      transition: background-color 0.5s ease-in-out;
+      margin-bottom: 10px;
+    }
+    .dark-mode table {
+      background-color: rgba(0, 0, 0, var(--table-bg-color-opacity));
+    }
+
+
+    th, td { border: 1px solid var(--border-color); padding: 0; }
+    th { background-color: var(--header-bg-color); color: var(--header-text-color); padding: 10px; transition: background-color 0.5s ease-in-out, color 0.5s ease-in-out; }
+    select, input:not([type="checkbox"]):not([type="range"]), button {
+      width: 100%; font-size: 1rem; padding: 5px;
+      box-sizing: border-box; 
+      margin-top: 5px;
+      /* パネルが背景色を持つため、inputの背景も透過するように設定 */
+      background-color: rgba(var(--settings-bg-color-rgb), 0.7); 
+      color: var(--text-color); 
+      border: 1px solid var(--border-color); 
+    }
+    input[type="range"] {
+        width: 100%;
+        margin-top: 10px;
+    }
+    button { cursor: pointer; background-color: var(--button-bg-color); color: white; border: none; border-radius: 5px; transition: background-color 0.3s; }
+    button:hover { background-color: var(--button-hover-bg-color); }
+
+    /* Selectの背景を透過させて、セルの色を見せる */
+    td select {
+        background-color: transparent;
+        border: none;
+        padding: 10px;
+        height: 100%;
+        padding: 10px 5px;
+    }
+    td { padding: 0; }
+
+    .empty-cell {
+        background-color: var(--empty-cell-bg-color);
+    }
+
+    /* 科目カラーにカスタムプロパティを適用 (デフォルトの固定科目のみ) */
+    .math     { background-color: var(--color-math); }
+    .english  { background-color: var(--color-english); }
+    .pe       { background-color: var(--color-pe); }
+    .science  { background-color: var(--color-science); }
+    .japanese { background-color: var(--color-japanese); }
+    .selecta  { background-color: var(--color-selecta); }
+    .selectb  { background-color: var(--color-selectb); }
+    .politics { background-color: var(--color-politics); }
+    .history  { background-color: var(--color-history); }
+    .tech     { background-color: var(--color-tech); }
+    .lh       { background-color: var(--color-lh); }
+    .practice { background-color: var(--color-practice); }
+    
+    /* NEW: Select要素の親TDに色を適用するため、tdにも色を定義 */
+    /* これにより、Select要素の背景を透過させていても色が見えるようになる */
+    td.math     { background-color: var(--color-math); }
+    td.english  { background-color: var(--color-english); }
+    td.pe       { background-color: var(--color-pe); }
+    td.science  { background-color: var(--color-science); }
+    td.japanese { background-color: var(--color-japanese); }
+    td.selecta  { background-color: var(--color-selecta); }
+    td.selectb  { background-color: var(--color-selectb); }
+    td.politics { background-color: var(--color-politics); }
+    td.history  { background-color: var(--color-history); }
+    td.tech     { background-color: var(--color-tech); }
+    td.lh       { background-color: var(--color-lh); }
+    td.practice { background-color: var(--color-practice); }
+
+
+    /* 現在の時限のハイライト表示 */
+    .current-period {
+        border: 4px solid red !important;
+        box-shadow: 0 0 10px rgba(255, 0, 0, 0.7);
+        transition: all 0.3s ease-in-out;
+    }
+
+    /* Background Selection Grid */
+    .background-selection-grid {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 10px;
+    }
+    .background-thumbnail {
+        width: 100px;
+        height: 60px;
+        background-size: cover;
+        background-position: center;
+        border: 2px solid var(--border-color); 
+        border-radius: 5px;
+        cursor: pointer;
+        position: relative;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        transition: border-color 0.3s;
+    }
+    .background-thumbnail:hover, .background-thumbnail.selected {
+        border-color: var(--button-bg-color); 
+    }
+    .image-name {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background-color: rgba(0, 0, 0, 0.6);
+        color: white;
+        font-size: 0.7rem;
+        padding: 2px 0;
+        border-radius: 0 0 5px 5px;
+        pointer-events: none; 
+    }
+    .small-note {
+        font-size: 0.8rem;
+        color: var(--text-color); 
+        margin-top: 5px;
+    }
+
+    /* スマホ対応 */
+    @media (max-width: 600px) {
+      body { padding: 10px; }
+      table { display: block; overflow-x: auto; white-space: nowrap; }
+      input, select, button { font-size: 1rem; padding: 8px; }
+      h1 { font-size: 1.2rem; }
+    }
+  </style>
+</head>
+
+<body class="loading">
+  <button id="exitBackgroundOnlyButton" style="display: none;" onclick="exitBackgroundOnlyMode()">×</button> 
+
+  <h1>時間割アプリ</h1>
+
+  <section class="general-settings">
+    <h2 id="generalSettingsHeader" onclick="toggleGeneralSettings()">
+        一般設定・表示設定 <span>▼</span>
+    </h2>
+    <div id="generalSettingsContent" class="general-settings-content">
+        <label>
+          <input type="checkbox" id="darkModeToggle"> ダークモード
+        </label>
+        
+        <div style="margin-top: 15px; text-align: left; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+            <h3>科目リストの編集</h3>
+            <p class="small-note">時間割で利用する科目をカンマ区切りで入力してください。**「---」（空欄）は削除しないでください。**<br><strong style="color:red;">（注: 新しい科目にはランダムな色が自動で割り当てられ、保存されます。）</strong></p>
+            <label>科目リスト:
+                <input type="text" id="customSubjectsInput" onchange="saveCustomSubjects()">
+            </label>
+            <button onclick="saveCustomSubjects()" style="margin-top: 5px; width: 100%;">科目リストを保存・適用</button>
+        </div>
+        
+        <div style="margin-top: 15px; text-align: left; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+            <h3>背景表示設定</h3>
+            <p class="small-note">**UI非表示モードの解除は、画面をリロードするか、**<strong style="color: red;">Escapeキー</strong>**を押すか、**<strong style="color: red;">右上の×ボタン</strong>**をタップしてください**</p>
+            <label style="display: block;"><input type="checkbox" id="toggleBackgroundEnabled" checked> **背景画像を表示**</label>
+            
+            <label style="display: block; margin-top: 10px;"><input type="checkbox" id="toggleBackgroundOnly"> **背景のみ表示（UI非表示）**</label>
+            
+            <label style="display: block; margin-top: 10px;"><input type="checkbox" id="toggleRotationEnabled"> **5秒ごとに自動で画像を切り替え**</label>
+            
+            <label style="display: block; margin-top: 10px;"><input type="checkbox" id="toggleTimeSwitchEnabled"> **時間で背景を切り替える**</label>
+            <div id="timeSwitchSettings" style="margin-left: 15px; display: none;">
+                <p class="small-note">日中開始時刻から夜間開始時刻までの間のみ背景画像を表示します。</p>
+                <label>日中開始時刻: <input type="time" id="dayStartTime" value="06:00" onchange="saveTimeSwitchSettings()"></label>
+                <label>夜間開始時刻: <input type="time" id="nightStartTime" value="18:00" onchange="saveTimeSwitchSettings()"></label>
+            </div>
+        </div>
+        
+        <div style="margin-top: 10px; padding-bottom: 10px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+            <h3>透過度設定</h3>
+            <label>
+                時間割テーブルの透過度:
+                <input type="range" id="timetableOpacityControl" min="0.1" max="1" step="0.05" value="0.8">
+            </label>
+            <label>
+                設定パネルの透過度:
+                <input type="range" id="settingsOpacityControl" min="0.1" max="1" step="0.05" value="0.6">
+            </label>
+        </div>
+        <div style="margin-top: 15px; text-align: left; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+            <strong>セクション表示切替</strong>
+            <p class="small-note">設定の完了後、不要なセクションを隠せます。（一括編集ボタンは時間割テーブルと連動）</p>
+            <label style="display: block;"><input type="checkbox" id="toggleBasicSettingsDisplay" checked> 時間割基本設定を表示</label>
+            <label style="display: block;"><input type="checkbox" id="toggleDayLimitSettingsDisplay" checked> 曜日別限数設定を表示</label>
+            <label style="display: block;"><input type="checkbox" id="toggleTimetableDisplay" checked> 時間割テーブルを表示</label>
+            <label style="display: block;"><input type="checkbox" id="togglePeriodTimeSettings" checked> 時限時刻設定を表示</label>
+            <label style="display: block;"><input type="checkbox" id="toggleHomeworkNotificationDisplay" checked> 課題通知設定を表示</label>
+            <label style="display: block;"><input type="checkbox" id="toggleBackgroundSelection" checked> 背景画像選択を表示</label>
+        </div>
+    </div>
+  </section>
+
+  <section class="settings" id="basic-settings-section">
+    <h2>時間割基本設定</h2>
+    <label>
+      曜日（カンマ区切り）:
+      <input type="text" id="daysInput" value="月,火,水,木,金">
+    </label>
+    <label>
+      最大限数:
+      <input type="number" id="periodsInput" value="6" min="1" max="10">
+    </label>
+    <button onclick="generateTimetable()">設定して時間割を生成</button>
+  </section>
+
+  <section class="day-limit-settings" id="day-limit-settings-section">
+    <h2>曜日別限数設定</h2>
+    <div id="periodLimitsContainer" class="period-limits-container">
+      </div>
+  </section>
+  
+  <section class="time-settings" id="time-settings-section">
+    <h2>時限時刻設定 (東京時間)</h2>
+    <div id="period-times-container">
+      </div>
+    <button onclick="savePeriodTimes()">時刻を保存</button>
+  </section>
+  
+  <section class="bulk-input-section">
+      <button onclick="showBulkInput()">一括編集モードに切り替え</button>
+  </section>
+
+  <section id="bulkInputSection" style="display:none; margin-bottom: 20px;">
+      <h2>時間割一括編集 (タブ区切り)</h2>
+      <p class="small-note">各行が「時限」、タブキー(またはスペース)で区切られた列が「曜日」に対応します。科目が存在しない場合は空欄または'---'を入力してください。</p>
+      <textarea id="bulkTextarea" rows="15" placeholder="例：
+数学	英語	体育
+理科	国語	---
+...
+"></textarea>
+      <button onclick="loadBulkTimetable()">一括で時間割を保存</button>
+      <button onclick="hideBulkInput()" class="secondary-button">通常モードに戻る</button>
+  </section>
+
+
+  <section id="table-section" class="table-section">
+    <table id="timetable">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section class="homework-section" id="homework-section">
+    <h2>課題通知 (ブラウザが閉じると停止します)</h2>
+    <label>
+      課題内容:
+      <input type="text" id="homeworkText" placeholder="例: 数学の宿題をやる">
+    </label>
+    <label>
+      通知時刻（24時間制）:
+      <input type="time" id="homeworkTime">
+    </label>
+    <div id="dayCheckboxes" style="margin-top: 10px;">
+        
+
+</div>
+    
+    <label>
+      通知音ファイルURL (MP3/WAV):
+      <input type="text" id="notificationSoundUrl" placeholder="例: https://example.com/sound.mp3">
+    </label>
+    
+    <label>
+      音量:
+      <input type="range" id="volumeControl" min="0" max="1" step="0.01" value="1">
+    </label>
+    <button onclick="setHomeworkReminder()">課題通知を設定</button>
+    <p class="small-note">本格的な通知にはPWAのセットアップが必要です。</p>
+  </section>
+
+  <audio id="notify-sound" src="" preload="auto"></audio> 
+
+  <section id="background-selection-section">
+    <h2>背景画像を選ぶ</h2>
+    <div class="background-url-input">
+        <label>
+            外部URLから設定:
+            <input type="text" id="externalImageUrl" placeholder="例: https://example.com/your-image.jpg">
+        </label>
+        <button onclick="setExternalBackground()">URLで背景を設定</button>
+    </div>
+    <div id="backgroundSelection" class="background-selection-grid">
+      </div>
+  </section>
+  
+  <script>
+    // --- External Library Setup (Assuming Luxon is loaded in index.html) ---
+    const DateTime = luxon.DateTime;
+
+    // --- STORAGE KEYS ---
+    const STORAGE_KEY_TIMETABLE = 'customTimetable';
+    const STORAGE_KEY_CONFIG = 'timetableConfig';
+    const STORAGE_KEY_PERIOD_TIMES = 'periodTimes';
+    const STORAGE_KEY_BG_INDEX = 'backgroundIndex';
+    const STORAGE_KEY_CUSTOM_BG_URL = 'customBackgroundUrl'; 
+    const STORAGE_KEY_DARK_MODE = 'darkModeEnabled'; 
+    const STORAGE_KEY_OPACITY = 'tableOpacity'; 
+    const STORAGE_KEY_SETTINGS_OPACITY = 'settingsOpacity'; 
+    const STORAGE_KEY_DISPLAY_CONFIG = 'displayConfig'; 
+    const STORAGE_KEY_HOMEWORK = 'homeworkReminder'; 
+    const STORAGE_KEY_GENERAL_SETTINGS_OPEN = 'generalSettingsOpen'; 
+    const STORAGE_KEY_CUSTOM_SUBJECTS = 'customSubjects'; 
+    
+    // NEW: 科目ごとの色を保存するストレージキー
+    const STORAGE_KEY_SUBJECT_COLORS = 'subjectColors'; 
+
+    // NEW BACKGROUND SETTINGS
+    const STORAGE_KEY_BG_ENABLED = 'backgroundEnabled'; 
+    const STORAGE_KEY_TIME_SWITCH_ENABLED = 'timeSwitchEnabled';
+    const STORAGE_KEY_SWITCH_TIMES = 'backgroundSwitchTimes';
+    const STORAGE_KEY_ROTATION_ENABLED = 'rotationEnabled'; 
+    const STORAGE_KEY_BG_ONLY = 'backgroundOnlyEnabled'; 
+    
+    // NEW INTERVAL
+    let timeSwitchInterval;
+    let rotationInterval; 
+
+
+    // --- SUBJECT & BACKGROUND DATA ---
+    const DEFAULT_SUBJECTS = ['---','数学','英語','体育','理科','国語','選択A','選択B','政治・経済','歴史','通信技術','LH','実習']; 
+    let subjects = []; 
+    // NEW: 科目名とCSSクラス/色のマッピング
+    let subjectClasses = {}; 
+    let subjectColors = {}; 
+    
+    // 固定科目のCSSクラスマッピング
+    const FIXED_COLOR_MAP = {
+      '---': 'empty-cell',
+      '数学':'math','英語':'english','体育':'pe','理科':'science','国語':'japanese',
+      '選択A':'selecta','選択B':'selectb','政治・経済':'politics','歴史':'history',
+      '通信技術':'tech','LH':'lh','実習':'practice'
+    };
+
+
+    let bgIndex = parseInt(localStorage.getItem(STORAGE_KEY_BG_INDEX) || '0', 10);
+    let customBgUrl = localStorage.getItem(STORAGE_KEY_CUSTOM_BG_URL) || ''; 
+    let periodTimes = JSON.parse(localStorage.getItem(STORAGE_KEY_PERIOD_TIMES) || '[]');
+    let timetableConfig = JSON.parse(localStorage.getItem(STORAGE_KEY_CONFIG) || '{"days": ["月", "火", "水", "木", "金"], "periods": 6}');
+    let highlightInterval;
+    let notificationTimeout; 
+    
+    // NEW BACKGROUND SETTINGS VARIABLES
+    let backgroundEnabled = localStorage.getItem(STORAGE_KEY_BG_ENABLED) !== 'false'; 
+    let timeSwitchEnabled = localStorage.getItem(STORAGE_KEY_TIME_SWITCH_ENABLED) === 'true';
+    let switchTimes = JSON.parse(localStorage.getItem(STORAGE_KEY_SWITCH_TIMES) || '{"dayStart": "06:00", "nightStart": "18:00"}');
+    let rotationEnabled = localStorage.getItem(STORAGE_KEY_ROTATION_ENABLED) === 'true'; 
+    let backgroundOnlyEnabled = localStorage.getItem(STORAGE_KEY_BG_ONLY) === 'true'; 
+    
+    const backgrounds = [
+        { name: "メモロビ", webp: "images/メモロビ.png", jpg: "images/メモロビ.png", thumb: "images/メモロビ.png" }, 
+        { name: "メモ2", webp: "images/メモ2.png", jpg: "images/メモ2.png", thumb: "images/メモ2.png" },
+        { name: "アグライア", webp: "images/アグライア.webp", jpg: "images/アグライア.jpg", thumb: "images/アグライア.webp" },
+        { name: "アナクサゴラス", webp: "images/アナクサゴラス.webp", jpg: "images/アナクサゴラス.jpg", thumb: "images/アナクサゴラス.webp" },
+        { name: "アベンチュリン", webp: "images/アベンチュリン.webp", jpg: "images/アベンチュリン.jpg", thumb: "images/アベンチュリン.webp" },
+        { name: "キャストリス", webp: "images/キャストリス.webp", jpg: "images/キャストリス.jpg", thumb: "images/キャストリス.webp" },
+        { name: "キュレネ", webp: "images/キュレネ.webp", jpg: "images/キュレネ.jpg", thumb: "images/キュレネ.webp" },
+        { name: "セファリア", webp: "images/セファリア.webp", jpg: "images/セファリア.jpg", thumb: "images/セファリア.webp" },
+        { name: "トリビー", webp: "images/トリビー.webp", jpg: "images/トリビー.jpg", thumb: "images/トリビー.webp" },
+        { name: "ヒアンシンシア", webp: "images/ヒアンシンシア.webp", jpg: "images/ヒアンシンシア.jpg", thumb: "images/ヒアンシンシア.webp" },
+        { name: "ファイノン", webp: "images/ファイノン.webp", jpg: "images/ファイノン.jpg", thumb: "images/ファイノン.webp" },
+        { name: "マダムヘルタ", webp: "images/マダムヘルタ.webp", jpg: "images/マダムヘルタ.jpg", thumb: "images/マダムヘルタ.webp" },
+        { name: "モーディス", webp: "images/モーディス.jpg", jpg: "images/モーディス.jpg", thumb: "images/モーディス.jpg" }, 
+    ];
+
+
+    // ==========================================================
+    // デバイス判定ヘルパー 
+    // ==========================================================
+
+    /**
+     * 画面幅が600px以下かどうかでモバイルデバイスと判定する。
+     * @returns {boolean}
+     */
+    function isMobileDevice() {
+        return window.innerWidth <= 600;
+    }
+
+
+    // ==========================================================
+    // 一般設定アコーディオン機能 
+    // ==========================================================
+    function toggleGeneralSettings() {
+        const header = document.getElementById('generalSettingsHeader');
+        const content = document.getElementById('generalSettingsContent');
+        const isOpen = content.classList.contains('active');
+        
+        if (isOpen) {
+            content.classList.remove('active');
+            header.classList.remove('open');
+            localStorage.setItem(STORAGE_KEY_GENERAL_SETTINGS_OPEN, 'false');
+        } else {
+            content.classList.add('active');
+            header.classList.add('open');
+            localStorage.setItem(STORAGE_KEY_GENERAL_SETTINGS_OPEN, 'true');
+        }
+    }
+
+    function loadGeneralSettingsState() {
+        const content = document.getElementById('generalSettingsContent');
+        const header = document.getElementById('generalSettingsHeader');
+        const isPreviouslyOpen = localStorage.getItem(STORAGE_KEY_GENERAL_SETTINGS_OPEN) === 'true';
+        
+        if (isPreviouslyOpen) {
+            content.classList.add('active');
+            header.classList.add('open');
+        }
+    }
+
+
+    // ==========================================================
+    // 科目リストの編集機能
+    // ==========================================================
+    
+    function saveCustomSubjects() {
+        let input = document.getElementById('customSubjectsInput').value.split(',').map(s => s.trim()).filter(s => s);
+        
+        // 必須科目'---'が削除された場合に対応
+        if (input.length === 0 || input[0] !== '---') {
+            input.unshift('---');
+        }
+        
+        // 重複を排除し、新しい科目リストを設定
+        subjects = Array.from(new Set(input)); 
+        
+        localStorage.setItem(STORAGE_KEY_CUSTOM_SUBJECTS, JSON.stringify(subjects));
+        document.getElementById('customSubjectsInput').value = subjects.join(',');
+        
+        // 科目リストが変わったら、色付け設定を更新し、時間割を再生成して変更を適用
+        readCssSubjectProperties(); 
+        generateTimetable();
+        alert("科目リストを保存し、時間割を更新しました。");
+    }
+
+    // **********************************************
+    // NEW: ランダムカラー生成ヘルパー
+    // **********************************************
+    function getRandomColor() {
+        const letters = '0123456789ABCDEF';
+        let color = '#';
+        for (let i = 0; i < 6; i++) {
+            color += letters[Math.floor(Math.random() * 16)];
+        }
+        return color;
+    }
+
+
+    // ==========================================================
+    // 時間割の生成・保存・読み込み 
+    // ==========================================================
+    /**
+     * 科目と色のマッピングを生成/ロードする
+     */
+    function readCssSubjectProperties() {
+        // 過去に保存されたカスタムカラーをロード
+        subjectColors = JSON.parse(localStorage.getItem(STORAGE_KEY_SUBJECT_COLORS) || '{}');
+        subjectClasses = {};
+
+        // 1. 固定のCSSクラスを適用
+        for (const [subject, className] of Object.entries(FIXED_COLOR_MAP)) {
+            subjectClasses[subject] = className;
+        }
+
+        // 2. ユーザー定義の科目に対して、色を決定
+        subjects.forEach(subject => {
+            // 固定科目でない、かつ '---' でもない場合
+            if (!FIXED_COLOR_MAP[subject] && subject !== '---') {
+                let color = subjectColors[subject];
+                
+                // 色が保存されていない場合、新しくランダムな色を生成して保存
+                if (!color) {
+                    color = getRandomColor();
+                    subjectColors[subject] = color;
+                }
+                
+                // カスタム科目にはクラスではなく、色自体をマッピング
+                subjectClasses[subject] = color; 
+            }
+        });
+        
+        // 3. 更新された色のマッピングを保存
+        localStorage.setItem(STORAGE_KEY_SUBJECT_COLORS, JSON.stringify(subjectColors));
+    }
+
+
+    function renderPeriodLimitInputs() {
+        const container = document.getElementById('periodLimitsContainer');
+        const days = timetableConfig.days;
+        
+        container.innerHTML = days.map((day) => {
+            const currentLimit = timetableConfig.periodLimits?.[day] || timetableConfig.periods;
+            return `
+                <div class="period-limit-input">
+                    <label>${day}曜日 (最大):</label>
+                    <input type="number" data-day="${day}" value="${currentLimit}" min="1" max="10" 
+                           onchange="updatePeriodLimit(this.dataset.day, this.value)">
+                </div>
+            `;
+        }).join('');
+    }
+
+    function updatePeriodLimit(day, limit) {
+        const numLimit = parseInt(limit, 10);
+        if (!timetableConfig.periodLimits) {
+            timetableConfig.periodLimits = {};
+        }
+        timetableConfig.periodLimits[day] = Math.min(numLimit, parseInt(document.getElementById('periodsInput').value, 10)); 
+        localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(timetableConfig));
+        generateTimetable(); 
+    }
+
+    function generateTimetable() {
+      const daysInput = document.getElementById('daysInput').value.split(',').map(d => d.trim()).filter(d => d);
+      const periodsInput = parseInt(document.getElementById('periodsInput').value, 10);
+
+      timetableConfig.days = daysInput;
+      timetableConfig.periods = periodsInput;
+
+      if (!timetableConfig.periodLimits) {
+          timetableConfig.periodLimits = {};
+      }
+      daysInput.forEach(day => {
+          if (!timetableConfig.periodLimits[day] || timetableConfig.periodLimits[day] > periodsInput) {
+               timetableConfig.periodLimits[day] = periodsInput;
+          }
+      });
+      
+      localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(timetableConfig));
+
+      const days = timetableConfig.days;
+      const maxPeriods = timetableConfig.periods;
+      
+      const thead = document.querySelector('#timetable thead');
+      const tbody = document.querySelector('#timetable tbody');
+
+      thead.innerHTML = `<tr><th>時限</th>${days.map(day => `<th>${day}</th>`).join('')}</tr>`;
+      tbody.innerHTML = '';
+      
+      // subjects変数を使用
+      const selectOptions = subjects.map(sub => `<option value="${sub}">${sub}</option>`).join('');
+
+      for (let i = 0; i < maxPeriods; i++) {
+        const rowContent = days.map((day, j) => {
+            const dayLimit = timetableConfig.periodLimits?.[day] || maxPeriods;
+            if (i >= dayLimit) {
+                return `<td class="empty-cell"></td>`; 
+            }
+            
+            return `
+                <td data-subject-cell>
+                    <select data-row="${i}" data-col="${j}">
+                        ${selectOptions}
+                    </select>
+                </td>
+            `;
+        }).join('');
+        
+        const row = document.createElement('tr');
+        row.innerHTML = `<td>${i + 1}限</td>${rowContent}`;
+        tbody.appendChild(row);
+      }
+      
+      document.querySelectorAll('#timetable select').forEach(select => {
+          select.addEventListener('change', () => {
+            saveTimetable();
+            applyColor(select);
+          });
+      });
+
+      loadTimetable();
+      createTimeInputs(maxPeriods);
+      renderPeriodLimitInputs(); 
+      renderNotificationDayCheckboxes(); 
+    }
+
+    function saveTimetable() {
+      const data = {};
+      document.querySelectorAll('#timetable select').forEach(select => {
+        const key = `${select.dataset.row}-${select.dataset.col}`;
+        data[key] = select.value;
+      });
+      localStorage.setItem(STORAGE_KEY_TIMETABLE, JSON.stringify(data));
+    }
+
+    function loadTimetable() {
+      const data = JSON.parse(localStorage.getItem(STORAGE_KEY_TIMETABLE) || '{}');
+      document.querySelectorAll('#timetable select').forEach(select => {
+        const key = `${select.dataset.row}-${select.dataset.col}`;
+        const savedValue = data[key];
+        
+        if (savedValue && subjects.includes(savedValue)) {
+          select.value = savedValue;
+        } else {
+          select.value = '---'; // 存在しない、または無効な科目は「---」にリセット
+        }
+        applyColor(select);
+      });
+      
+      highlightCurrentPeriod();
+    }
+
+    /**
+     * セルの色付けを適用する
+     * @param {HTMLSelectElement} select 
+     */
+    function applyColor(select) {
+        const td = select.parentNode;
+        const subject = select.value;
+        const colorOrClass = subjectClasses[subject];
+
+        // 以前のクラスとインラインスタイルをリセット
+        td.className = '';
+        select.className = '';
+        td.style.backgroundColor = '';
+
+        if (colorOrClass === 'empty-cell') {
+            td.classList.add('empty-cell');
+            select.classList.add('empty-cell');
+            return;
+        }
+
+        // '#RRGGBB'形式の場合 (カスタムカラー)
+        if (colorOrClass && colorOrClass.startsWith('#')) {
+            td.style.backgroundColor = colorOrClass;
+        } 
+        // クラス名の場合 (デフォルト科目)
+        else if (colorOrClass) {
+            td.classList.add(colorOrClass);
+            // select要素にもクラスを付けて、paddingなどで隙間ができた際に対応
+            select.classList.add(colorOrClass); 
+        }
+    }
+
+    // **********************************************
+    // 時限時刻設定・ハイライト
+    // **********************************************
+
+    function createTimeInputs(periods) {
+      const container = document.getElementById('period-times-container');
+      container.innerHTML = Array.from({ length: periods }, (_, i) => {
+          const periodData = periodTimes[i] || { start: '', end: '' };
+          return `
+            <div class="period-time-input">
+              <strong>${i + 1}限</strong><br>
+              開始: <input type="time" id="start-${i}" data-index="${i}" value="${periodData.start}"><br>
+              終了: <input type="time" id="end-${i}" data-index="${i}" value="${periodData.end}">
+            </div>
+          `;
+      }).join('');
+    }
+
+    function savePeriodTimes() {
+      const periods = timetableConfig.periods;
+      const newPeriodTimes = [];
+      let isValid = true;
+
+      for (let i = 0; i < periods; i++) {
+        const startValue = document.getElementById(`start-${i}`).value;
+        const endValue = document.getElementById(`end-${i}`).value;
+
+        if (!startValue || !endValue) {
+          alert(`${i + 1}限の開始時刻と終了時刻を両方入力してください。`);
+          isValid = false;
+          break;
+        }
+
+        const start = DateTime.fromFormat(startValue, 'HH:mm', { zone: 'Asia/Tokyo' });
+        const end = DateTime.fromFormat(endValue, 'HH:mm', { zone: 'Asia/Tokyo' });
+
+        if (start.invalid || end.invalid) {
+            alert(`${i + 1}限: 時刻の形式が不正です。HH:mm形式で入力してください。`);
+            isValid = false;
+            break;
+        }
+        
+        if (start >= end) {
+          alert(`${i + 1}限: 開始時刻 (${startValue}) は終了時刻 (${endValue}) より前に設定してください。`);
+          isValid = false;
+          break;
+        }
+
+        if (i > 0) {
+          const prevEnd = DateTime.fromFormat(newPeriodTimes[i-1].end, 'HH:mm', { zone: 'Asia/Tokyo' });
+          if (start < prevEnd) {
+            alert(`${i + 1}限: 開始時刻 (${startValue}) は、前の時限の終了時刻 (${newPeriodTimes[i-1].end}) より後に設定してください。`);
+            isValid = false;
+            break;
+          }
+        }
+        
+        newPeriodTimes.push({ start: startValue, end: endValue });
+      }
+
+      if (isValid) {
+        periodTimes = newPeriodTimes;
+        localStorage.setItem(STORAGE_KEY_PERIOD_TIMES, JSON.stringify(periodTimes));
+        alert('時限時刻を保存しました。現在の時限のハイライトが開始されます。');
+        
+        clearInterval(highlightInterval);
+        highlightCurrentPeriod();
+        highlightInterval = setInterval(highlightCurrentPeriod, 30000);
+      }
+    }
+
+    function highlightCurrentPeriod() {
+        document.querySelectorAll('.current-period').forEach(el => el.classList.remove('current-period'));
+
+        if (periodTimes.length === 0) return;
+
+        const nowJST = DateTime.now().setZone('Asia/Tokyo');
+        
+        const currentDayOfWeek = nowJST.weekday; 
+        const dayIndexMap = { 1: '月', 2: '火', 3: '水', 4: '木', 5: '金', 6: '土', 7: '日' };
+        
+        const currentDayStr = dayIndexMap[currentDayOfWeek];
+        const daysInTimetable = timetableConfig.days; 
+        
+        const colIndex = daysInTimetable.indexOf(currentDayStr);
+
+        if (colIndex === -1) return;
+
+        const currentTimeStr = nowJST.toFormat('HH:mm');
+        let currentPeriodRow = -1;
+
+        const dayLimit = timetableConfig.periodLimits?.[currentDayStr] || timetableConfig.periods;
+
+        for (let i = 0; i < periodTimes.length; i++) {
+            const p = periodTimes[i];
+            
+            if (i >= dayLimit) break; 
+
+            if (p.start && p.end) {
+                if (currentTimeStr >= p.start && currentTimeStr < p.end) {
+                    currentPeriodRow = i;
+                    break;
+                }
+            }
+        }
+
+        if (currentPeriodRow !== -1) {
+            const cellSelector = `select[data-row="${currentPeriodRow}"][data-col="${colIndex}"]`;
+            const currentCellSelect = document.querySelector(cellSelector);
+            
+            if (currentCellSelect) {
+                currentCellSelect.classList.add('current-period');
+                // Select要素の親TDにもクラスを適用 (ハイライトがSelectに隠れないように)
+                currentCellSelect.parentNode.classList.add('current-period');
+            }
+        }
+    }
+    
+    // **********************************************
+    // 背景設定 
+    // **********************************************
+    
+    function startBackgroundRotation() {
+        stopBackgroundRotation(); 
+        rotationInterval = setInterval(cycleBackground, 5000); 
+        console.log("✅ 背景の自動切り替え (5秒ごと) が有効になりました。");
+    }
+
+    function stopBackgroundRotation() {
+        clearInterval(rotationInterval);
+        console.log("❌ 背景の自動切り替え (5秒ごと) が停止しました。");
+    }
+
+    function cycleBackground() {
+        if (backgrounds.length === 0) return; 
+
+        if (bgIndex < 0 || bgIndex >= backgrounds.length) {
+            bgIndex = 0;
+        } else {
+            bgIndex = (bgIndex + 1) % backgrounds.length;
+        }
+        
+        // 画像の適用 (applyBackgroundは、rotationEnabledのチェックも行う)
+        applyBackground();
+    }
+    
+    function saveTimeSwitchSettings() {
+        switchTimes.dayStart = document.getElementById('dayStartTime').value || '06:00';
+        switchTimes.nightStart = document.getElementById('nightStartTime').value || '18:00';
+        localStorage.setItem(STORAGE_KEY_SWITCH_TIMES, JSON.stringify(switchTimes));
+        applyBackground();
+    }
+
+    function isDayTime(nowJST) {
+        if (!nowJST) {
+            nowJST = DateTime.now().setZone('Asia/Tokyo');
+        }
+        const currentTimeStr = nowJST.toFormat('HH:mm');
+        const dayStart = switchTimes.dayStart;
+        const nightStart = switchTimes.nightStart;
+        
+        if (dayStart < nightStart) {
+            return currentTimeStr >= dayStart && currentTimeStr < nightStart;
+        } else {
+            // 例: DayStart 22:00, NightStart 06:00
+            // 22:00 <= Current <= 23:59 または 00:00 <= Current < 06:00
+            return currentTimeStr >= dayStart || currentTimeStr < nightStart;
+        }
+    }
+
+
+    function renderBackgroundSelection() {
+        const container = document.getElementById('backgroundSelection');
+        const html = backgrounds.map((bg, index) => {
+            const thumbPath = bg.thumb; 
+            const isSelected = !rotationEnabled && !customBgUrl && bgIndex === index;
+            return `
+                <div class="background-thumbnail ${isSelected ? 'selected' : ''}" 
+                     onclick="selectBackground(${index});" 
+                     style="background-image: url('${thumbPath}');" 
+                     data-index="${index}">
+                    <span class="image-name">${bg.name}</span>
+                </div>
+            `;
+        }).join('');
+        container.innerHTML = html;
+
+        if (customBgUrl) {
+            document.getElementById('externalImageUrl').value = customBgUrl;
+        }
+    }
+
+    function setExternalBackground() {
+        const url = document.getElementById('externalImageUrl').value.trim();
+        if (url) {
+            customBgUrl = url;
+            localStorage.setItem(STORAGE_KEY_CUSTOM_BG_URL, customBgUrl);
+            bgIndex = -1; 
+            localStorage.setItem(STORAGE_KEY_BG_INDEX, bgIndex);
+            
+            if (rotationEnabled) {
+                document.getElementById('toggleRotationEnabled').checked = false;
+                rotationEnabled = false;
+                localStorage.setItem(STORAGE_KEY_ROTATION_ENABLED, false);
+                stopBackgroundRotation();
+            }
+            applyBackground();
+            updateBackgroundSelectionUI();
+        } else {
+            alert("画像URLを入力してください。");
+        }
+    }
+
+    function selectBackground(index) {
+        customBgUrl = ''; 
+        localStorage.removeItem(STORAGE_KEY_CUSTOM_BG_URL);
+        document.getElementById('externalImageUrl').value = ''; 
+
+        bgIndex = index;
+        localStorage.setItem(STORAGE_KEY_BG_INDEX, bgIndex);
+        
+        // 回転が有効でも強制的に手動選択を適用
+        if (rotationEnabled) {
+            document.getElementById('toggleRotationEnabled').checked = false;
+            rotationEnabled = false;
+            localStorage.setItem(STORAGE_KEY_ROTATION_ENABLED, false);
+            stopBackgroundRotation();
+        }
+
+        applyBackground();
+        updateBackgroundSelectionUI();
+    }
+
+    function applyBackground() {
+        const body = document.body;
+        
+        if (!backgroundEnabled) {
+            body.style.backgroundImage = 'none';
+            return;
+        }
+
+        const nowJST = DateTime.now().setZone('Asia/Tokyo');
+        if (timeSwitchEnabled && !isDayTime(nowJST)) {
+            body.style.backgroundImage = 'none'; 
+            return; 
+        }
+
+        let path = '';
+        
+        if (rotationEnabled && backgrounds.length > 0) {
+            if (bgIndex < 0 || bgIndex >= backgrounds.length) {
+                bgIndex = 0; 
+            }
+            const bg = backgrounds[bgIndex];
+            const isMobile = isMobileDevice(); 
+            // 実際にはwebpとjpgのファイルを用意する必要がありますが、ここではplaceholderとしてjpgを使用
+            path = bg.jpg; 
+            
+        } else if (customBgUrl) {
+            path = customBgUrl;
+        } else if (bgIndex >= 0 && bgIndex < backgrounds.length) {
+            const bg = backgrounds[bgIndex];
+            const isMobile = isMobileDevice(); 
+            path = bg.jpg; // 実際にはwebpとjpgのファイルを用意する必要があります
+        } 
+        
+        if (path) {
+            body.style.backgroundImage = `url('${path}')`;
+        } else {
+            // パスがない場合、またはカスタムURLで失敗した場合
+            body.style.backgroundImage = 'none'; 
+        }
+    }
+
+    function updateBackgroundSelectionUI() {
+        document.querySelectorAll('.background-thumbnail').forEach((thumb, index) => {
+            const isSelected = !rotationEnabled && !customBgUrl && index === bgIndex;
+            if (isSelected) {
+                thumb.classList.add('selected');
+            } else {
+                thumb.classList.remove('selected');
+            }
+        });
+        if (customBgUrl) {
+            document.getElementById('externalImageUrl').value = customBgUrl;
+        } else {
+            document.getElementById('externalImageUrl').value = '';
+        }
+    }
+    
+    function setupTimeSwitchInterval() {
+        clearInterval(timeSwitchInterval);
+        if (timeSwitchEnabled) {
+            timeSwitchInterval = setInterval(applyBackground, 60000); 
+            console.log("✅ 背景の時間切り替えが有効になりました。");
+        } else {
+            console.log("❌ 背景の時間切り替えは無効です。");
+        }
+    }
+
+    function loadBackgroundToggles() {
+        const bgEnabledToggle = document.getElementById('toggleBackgroundEnabled');
+        const timeSwitchToggle = document.getElementById('toggleTimeSwitchEnabled');
+        const timeSwitchSettings = document.getElementById('timeSwitchSettings');
+        const dayStartTimeInput = document.getElementById('dayStartTime');
+        const nightStartTimeInput = document.getElementById('nightStartTime');
+        const rotationToggle = document.getElementById('toggleRotationEnabled'); 
+
+        bgEnabledToggle.checked = backgroundEnabled;
+        bgEnabledToggle.addEventListener('change', (e) => {
+            backgroundEnabled = e.target.checked;
+            localStorage.setItem(STORAGE_KEY_BG_ENABLED, backgroundEnabled);
+            applyBackground();
+        });
+
+        timeSwitchToggle.checked = timeSwitchEnabled;
+        timeSwitchSettings.style.display = timeSwitchEnabled ? 'block' : 'none';
+        
+        timeSwitchToggle.addEventListener('change', (e) => {
+            timeSwitchEnabled = e.target.checked;
+            localStorage.setItem(STORAGE_KEY_TIME_SWITCH_ENABLED, timeSwitchEnabled);
+            timeSwitchSettings.style.display = timeSwitchEnabled ? 'block' : 'none';
+            setupTimeSwitchInterval(); 
+            applyBackground();
+        });
+        
+        rotationToggle.checked = rotationEnabled;
+        rotationToggle.addEventListener('change', (e) => {
+            rotationEnabled = e.target.checked;
+            localStorage.setItem(STORAGE_KEY_ROTATION_ENABLED, rotationEnabled);
+            
+            if (rotationEnabled) {
+                customBgUrl = ''; 
+                localStorage.removeItem(STORAGE_KEY_CUSTOM_BG_URL);
+                document.getElementById('externalImageUrl').value = ''; 
+                startBackgroundRotation();
+            } else {
+                stopBackgroundRotation();
+            }
+            applyBackground();
+            updateBackgroundSelectionUI();
+        });
+
+        dayStartTimeInput.value = switchTimes.dayStart;
+        nightStartTimeInput.value = switchTimes.nightStart;
+    }
+    
+    // NEW: 背景のみ表示モードの切り替え関数
+    function toggleBackgroundOnlyMode() {
+        const body = document.body;
+        const toggle = document.getElementById('toggleBackgroundOnly');
+        const exitButton = document.getElementById('exitBackgroundOnlyButton'); 
+        
+        if (toggle.checked) {
+            body.classList.add('background-only');
+            exitButton.style.display = 'block'; 
+            localStorage.setItem(STORAGE_KEY_BG_ONLY, 'true');
+            backgroundOnlyEnabled = true;
+        } else {
+            body.classList.remove('background-only');
+            exitButton.style.display = 'none'; 
+            localStorage.setItem(STORAGE_KEY_BG_ONLY, 'false');
+            backgroundOnlyEnabled = false;
+        }
+    }
+    
+    // NEW: バツボタンから呼び出す解除関数
+    function exitBackgroundOnlyMode() {
+        backgroundOnlyEnabled = false;
+        localStorage.setItem(STORAGE_KEY_BG_ONLY, 'false');
+        document.body.classList.remove('background-only');
+        
+        const exitButton = document.getElementById('exitBackgroundOnlyButton'); 
+        if (exitButton) exitButton.style.display = 'none';
+        
+        const toggle = document.getElementById('toggleBackgroundOnly');
+        if (toggle) {
+            toggle.checked = false;
+        }
+        console.log("✅ '×'ボタンにより背景のみ表示モードが解除されました。");
+    }
+
+
+    // NEW: 背景のみ表示設定のロードとイベントリスナー設定
+    function loadBackgroundOnlySetting() {
+        const toggle = document.getElementById('toggleBackgroundOnly');
+        const exitButton = document.getElementById('exitBackgroundOnlyButton'); 
+        if (!toggle || !exitButton) return;
+
+        toggle.checked = backgroundOnlyEnabled;
+        toggle.addEventListener('change', toggleBackgroundOnlyMode);
+        
+        if (backgroundOnlyEnabled) {
+            document.body.classList.add('background-only');
+            exitButton.style.display = 'block'; 
+        } else {
+            exitButton.style.display = 'none';
+        }
+    }
+    
+    // NEW: Escapeキーで背景のみ表示モードを解除する機能を追加
+    function setupEscapeKeyExit() {
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (backgroundOnlyEnabled) {
+                    e.preventDefault(); // Escapeキーのデフォルト動作を抑止
+                    exitBackgroundOnlyMode(); 
+                }
+            }
+        });
+    }
+
+
+    // ==========================================================
+    // ダークモード
+    // ==========================================================
+
+    function toggleDarkMode() {
+        const body = document.body;
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        
+        if (darkModeToggle.checked) {
+            body.classList.add('dark-mode');
+            localStorage.setItem(STORAGE_KEY_DARK_MODE, 'true');
+        } else {
+            body.classList.remove('dark-mode');
+            localStorage.setItem(STORAGE_KEY_DARK_MODE, 'false');
+        }
+    }
+
+    function loadDarkModeSetting() {
+        const darkModeToggle = document.getElementById('darkModeToggle');
+        const isDarkMode = localStorage.getItem(STORAGE_KEY_DARK_MODE) === 'true';
+        darkModeToggle.checked = isDarkMode;
+        toggleDarkMode(); 
+    }
+
+    // ==========================================================
+    // 透過度設定 
+    // ==========================================================
+
+    function updateTableTransparency(value) {
+        const opacity = parseFloat(value) || 0.8;
+        document.documentElement.style.setProperty('--table-bg-color-opacity', opacity);
+        localStorage.setItem(STORAGE_KEY_OPACITY, opacity);
+    }
+    
+    function updateSettingsTransparency(value) {
+        const opacity = parseFloat(value) || 0.6; 
+        document.documentElement.style.setProperty('--settings-bg-opacity', opacity);
+        localStorage.setItem(STORAGE_KEY_SETTINGS_OPACITY, opacity);
+    }
+
+    function loadTransparencies() {
+        const savedTableOpacity = localStorage.getItem(STORAGE_KEY_OPACITY) || '0.8';
+        const tableSlider = document.getElementById('timetableOpacityControl');
+        if (tableSlider) {
+            tableSlider.value = savedTableOpacity;
+            updateTableTransparency(savedTableOpacity);
+            tableSlider.addEventListener('input', (e) => updateTableTransparency(e.target.value));
+        }
+
+        const savedSettingsOpacity = localStorage.getItem(STORAGE_KEY_SETTINGS_OPACITY) || '0.6'; 
+        const settingsSlider = document.getElementById('settingsOpacityControl');
+        if (settingsSlider) {
+            settingsSlider.value = savedSettingsOpacity;
+            updateSettingsTransparency(savedSettingsOpacity);
+            settingsSlider.addEventListener('input', (e) => updateSettingsTransparency(e.target.value));
+        }
+    }
+    
+    // ==========================================================
+    // セクション表示切替
+    // ==========================================================
+    
+    function toggleDisplay(elementId, key, isChecked) {
+        const element = document.getElementById(elementId);
+        if (!element) return;
+
+        element.style.display = isChecked ? 'block' : 'none';
+        
+        if (key === 'timetable') {
+            const bulkButton = document.querySelector('.bulk-input-section');
+            // 時間割テーブルが表示されているとき、一括編集ボタンも表示
+            if(bulkButton) bulkButton.style.display = isChecked ? 'block' : 'none';
+            // ただし、一括編集モードの場合はテーブルは非表示
+            if (document.getElementById('bulkInputSection').style.display === 'block') {
+                element.style.display = 'none';
+            }
+        }
+        
+        // バルクインプットセクションとバルクボタンは連動するため、別途設定
+        if (key === 'periodTimes') {
+            document.getElementById('time-settings-section').style.display = isChecked ? 'block' : 'none';
+        }
+
+
+        const displayConfig = JSON.parse(localStorage.getItem(STORAGE_KEY_DISPLAY_CONFIG) || '{}');
+        displayConfig[key] = isChecked;
+        localStorage.setItem(STORAGE_KEY_DISPLAY_CONFIG, JSON.stringify(displayConfig));
+    }
+
+    function loadDisplayConfig() {
+        const displayConfig = JSON.parse(localStorage.getItem(STORAGE_KEY_DISPLAY_CONFIG) || '{}');
+        
+        const defaultSettings = {
+            basicSettings: true,
+            dayLimitSettings: true,
+            timetable: true,
+            periodTimes: true,
+            homework: true,
+            background: true
+        };
+
+        const config = { ...defaultSettings, ...displayConfig };
+
+        const controls = [
+            { id: 'toggleBasicSettingsDisplay', sectionId: 'basic-settings-section', key: 'basicSettings' },
+            { id: 'toggleDayLimitSettingsDisplay', sectionId: 'day-limit-settings-section', key: 'dayLimitSettings' },
+            { id: 'toggleTimetableDisplay', sectionId: 'table-section', key: 'timetable' },
+            { id: 'togglePeriodTimeSettings', sectionId: 'time-settings-section', key: 'periodTimes' },
+            { id: 'toggleHomeworkNotificationDisplay', sectionId: 'homework-section', key: 'homework' },
+            { id: 'toggleBackgroundSelection', sectionId: 'background-selection-section', key: 'background' }
+        ];
+
+        controls.forEach(ctrl => {
+            const toggle = document.getElementById(ctrl.id);
+            if (toggle) {
+                // 初期設定の適用
+                toggle.checked = config[ctrl.key];
+                toggleDisplay(ctrl.sectionId, ctrl.key, config[ctrl.key]);
+
+                // イベントリスナーの設定
+                toggle.addEventListener('change', (e) => toggleDisplay(ctrl.sectionId, ctrl.key, e.target.checked));
+            }
+        });
+    }
+
+    // **********************************************
+    // 課題通知
+    // **********************************************
+
+    function renderNotificationDayCheckboxes() {
+        const container = document.getElementById('dayCheckboxes');
+        const days = timetableConfig.days; 
+        container.innerHTML = days.map(day => `
+            <label style="margin-right: 10px;">
+                <input type="checkbox" name="notifyDay" value="${day}"> ${day}
+            </label>
+        `).join('');
+        loadHomeworkReminder(); 
+    }
+
+    function loadHomeworkReminder() {
+        const data = JSON.parse(localStorage.getItem(STORAGE_KEY_HOMEWORK) || '{}');
+        document.getElementById('homeworkText').value = data.text || '';
+        document.getElementById('homeworkTime').value = data.time || '';
+        
+        const soundUrlInput = document.getElementById('notificationSoundUrl');
+        if (soundUrlInput) soundUrlInput.value = data.soundUrl || '';
+        
+        document.getElementById('volumeControl').value = data.volume || '1';
+        
+        const audio = document.getElementById('notify-sound');
+        // デフォルトの音源が存在しない場合はエラーを避けるためにsrcを空にする
+        audio.src = data.soundUrl || ''; 
+        
+        const days = timetableConfig.days; 
+        days.forEach(day => {
+            const checkbox = document.querySelector(`#dayCheckboxes input[value="${day}"]`);
+            if (checkbox && data.notifyDays && data.notifyDays.includes(day)) {
+                checkbox.checked = true;
+            }
+        });
+    }
+    
+    function setHomeworkReminder() {
+      const text = document.getElementById('homeworkText').value;
+      const timeValue = document.getElementById('homeworkTime').value;
+      const soundUrl = document.getElementById('notificationSoundUrl').value.trim(); 
+      const audio = document.getElementById('notify-sound');
+      
+      audio.src = soundUrl || 'maou_inst_04_tsuki_to_okami.mp3';
+      
+      audio.volume = document.getElementById('volumeControl').value;
+      const notifyDays = Array.from(document.querySelectorAll('#dayCheckboxes input[name="notifyDay"]:checked')).map(cb => cb.value);
+
+      if (notificationTimeout) clearTimeout(notificationTimeout); 
+
+      if (!text || !timeValue || notifyDays.length === 0) {
+        alert('課題内容、通知時刻、通知する曜日を正しく入力してください');
+        return;
+      }
+      
+      const reminderData = {
+            text: text,
+            time: timeValue,
+            soundUrl: soundUrl, 
+            volume: audio.volume,
+            notifyDays: notifyDays
+        };
+        localStorage.setItem(STORAGE_KEY_HOMEWORK, JSON.stringify(reminderData));
+
+      const [hours, minutes] = timeValue.split(':').map(Number);
+      
+      const dayMap = {'月': 1, '火': 2, '水': 3, '木': 4, '金': 5, '土': 6, '日': 7};
+      const targetLuxonWeekDays = notifyDays.map(d => dayMap[d]);
+
+      function scheduleNotification() {
+        const nowJST = DateTime.now().setZone('Asia/Tokyo');
+        let nextNotificationTime = null;
+
+        for (let i = 0; i < 7; i++) { 
+            let candidateTime = nowJST.plus({ days: i }).set({ hour: hours, minute: minutes, second: 0, millisecond: 0 });
+            
+            if (targetLuxonWeekDays.includes(candidateTime.weekday) && candidateTime > nowJST) {
+                nextNotificationTime = candidateTime;
+                break;
+            }
+        }
+        
+        if (!nextNotificationTime) {
+            // 次の週の最初の通知日を見つける
+            let closestNextDay = targetLuxonWeekDays.sort((a,b) => {
+                const diffA = (a - nowJST.weekday + 7) % 7;
+                const diffB = (b - nowJST.weekday + 7) % 7;
+                return diffA - diffB;
+            })[0]; 
+            
+            nextNotificationTime = nowJST.set({ hour: hours, minute: minutes, second: 0, millisecond: 0 });
+            // もし今日の日付または今日の日付より前だったら、次の週に設定
+            if (nowJST.weekday >= closestNextDay || nextNotificationTime <= nowJST) { 
+                nextNotificationTime = nextNotificationTime.plus({ weeks: 1 });
+            }
+            nextNotificationTime = nextNotificationTime.set({ weekday: closestNextDay });
+        }
+
+
+        const delay = nextNotificationTime.diff(nowJST).milliseconds;
+
+        notificationTimeout = setTimeout(() => { 
+          // 通知実行
+          audio.currentTime = 0; // 再生開始位置を先頭に戻す
+          audio.play().catch(e => console.error("音源の再生に失敗しました:", e));
+
+          alert("📢 課題の時間です！\n" + text);
+          
+          // 次の通知をスケジュール
+          scheduleNotification(); 
+        }, delay);
+        
+        console.log(`次の通知は ${nextNotificationTime.toFormat('yyyy/MM/dd (EEE) HH:mm')} にスケジュールされました。`);
+      }
+
+      scheduleNotification();
+      alert(`通知を設定しました（東京時間基準）。\n選択された曜日の ${hours}時${minutes}分 に通知されます。`);
+    }
+
+    // **********************************************
+    // 一括入力機能
+    // **********************************************
+    
+    function showBulkInput() {
+        const tableData = getTimetableDataForBulk();
+        document.getElementById('bulkTextarea').value = tableData;
+        document.getElementById('bulkInputSection').style.display = 'block';
+        document.getElementById('table-section').style.display = 'none';
+        document.querySelector('.bulk-input-section').style.display = 'none'; 
+        
+        // セクション表示切替でテーブルが非表示になっている場合も強制的に表示
+        const tableToggle = document.getElementById('toggleTimetableDisplay');
+        if (tableToggle && !tableToggle.checked) {
+             document.querySelector('.bulk-input-section').style.display = 'block'; 
+        }
+    }
+
+    function hideBulkInput() {
+        document.getElementById('bulkInputSection').style.display = 'none';
+        
+        // 表示設定に応じてテーブルとボタンを表示に戻す
+        const tableToggle = document.getElementById('toggleTimetableDisplay');
+        if (tableToggle && tableToggle.checked) {
+            document.getElementById('table-section').style.display = 'block';
+            document.querySelector('.bulk-input-section').style.display = 'block'; 
+        } else {
+             document.querySelector('.bulk-input-section').style.display = 'block'; 
+        }
+        
+        generateTimetable(); // データ読み込みと再描画
+    }
+
+    function getTimetableDataForBulk() { 
+        const maxPeriods = timetableConfig.periods;
+        const days = timetableConfig.days;
+        const savedData = JSON.parse(localStorage.getItem(STORAGE_KEY_TIMETABLE) || '{}');
+        let output = '';
+
+        for (let i = 0; i < maxPeriods; i++) {
+            let row = [];
+            for (let j = 0; j < days.length; j++) {
+                const day = days[j];
+                const dayLimit = timetableConfig.periodLimits?.[day] || maxPeriods;
+                
+                if (i >= dayLimit) {
+                    row.push(''); 
+                } else {
+                    const key = `${i}-${j}`;
+                    row.push(savedData[key] || '---');
+                }
+            }
+            output += row.join('\t') + '\n'; 
+        }
+        return output.trim();
+    }
+
+    function loadBulkTimetable() {
+        const text = document.getElementById('bulkTextarea').value.trim();
+        if (!text) return;
+
+        const days = timetableConfig.days;
+        const maxPeriods = timetableConfig.periods;
+        const lines = text.split('\n');
+        const newData = {};
+
+        lines.forEach((line, i) => {
+            if (i >= maxPeriods) return;
+            // subjects配列に存在する科目だけを有効とする
+            const validSubjects = subjects; 
+            
+            // タブ区切りをスペース区切り、またはその逆で誤入力された場合を考慮し、空白文字で分割
+            const subjectsInRow = line.split(/[\t]+/).map(s => s.trim()); // スペースのみの区切りは考慮しないように修正
+            
+            subjectsInRow.forEach((subject, j) => {
+                if (j >= days.length) return;
+                const day = days[j];
+                const dayLimit = timetableConfig.periodLimits?.[day] || maxPeriods;
+                
+                if (i < dayLimit) {
+                    // 科目がリストに存在するか確認し、存在しない場合はリストに追加（自動保存処理が後で走る）
+                    const subjectToSave = subject || '---';
+                    if (!validSubjects.includes(subjectToSave)) {
+                        subjects.push(subjectToSave);
+                    }
+                    newData[`${i}-${j}`] = subjectToSave;
+                }
+            });
+        });
+
+        localStorage.setItem(STORAGE_KEY_TIMETABLE, JSON.stringify(newData));
+        // 科目リストの変更を反映させるため、保存処理を再度呼び出し
+        saveCustomSubjects(); 
+        
+        alert('時間割を一括で保存しました。');
+        hideBulkInput();
+    }
+
+    // ==========================================================
+    // 全体初期化
+    // ==========================================================
+
+    function loadInitialSettings() {
+        // 1. 科目リストと色の設定をロード
+        const savedSubjects = JSON.parse(localStorage.getItem(STORAGE_KEY_CUSTOM_SUBJECTS));
+        subjects = savedSubjects && savedSubjects.length > 0 ? savedSubjects : DEFAULT_SUBJECTS;
+        
+        const customSubjectsInput = document.getElementById('customSubjectsInput');
+        if (customSubjectsInput) {
+            customSubjectsInput.value = subjects.join(',');
+        }
+        
+        // 色のマッピングを生成・ロード
+        readCssSubjectProperties(); 
+        
+        // 2. その他の設定をロード
+        loadBackgroundOnlySetting(); 
+        loadGeneralSettingsState();
+        loadDarkModeSetting(); 
+        loadTransparencies(); 
+        loadBackgroundToggles(); 
+
+        document.getElementById('daysInput').value = timetableConfig.days.join(',');
+        document.getElementById('periodsInput').value = timetableConfig.periods;
+        
+        // 3. 時間割を生成・描画
+        generateTimetable(); 
+        createTimeInputs(timetableConfig.periods); 
+        
+        // 4. 背景・通知設定
+        renderBackgroundSelection();
+        
+        if (rotationEnabled) {
+            startBackgroundRotation();
+        }
+        
+        applyBackground();
+        updateBackgroundSelectionUI();
+        setupTimeSwitchInterval(); 
+
+        renderNotificationDayCheckboxes(); 
+
+        // 5. 表示設定
+        loadDisplayConfig(); 
+
+        // 6. 時限ハイライトの開始
+        highlightCurrentPeriod();
+        highlightInterval = setInterval(highlightCurrentPeriod, 30000); 
+
+        window.addEventListener('resize', applyBackground);
+        setupEscapeKeyExit();
+
+        document.body.classList.remove('loading');
+
+        document.getElementById('darkModeToggle').addEventListener('change', toggleDarkMode);
+        
+        // --- PWA Service Worker 登録は、loadInitialSettingsの最後に実行 ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                // service-worker.jsが同じディレクトリにあることを期待
+                navigator.serviceWorker.register('./service-worker.js')
+                .then(registration => {
+                    console.log('✅ Service Worker registered with scope:', registration.scope);
+                })
+                .catch(err => {
+                    console.error('❌ Service Worker registration failed:', err);
+                });
+            });
+        }
+        // -----------------------------------------------------------------
+    }
+
+    window.addEventListener('load', loadInitialSettings);
+  </script>
+</body>
+</html>

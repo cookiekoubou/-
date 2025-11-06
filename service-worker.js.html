@@ -1,0 +1,62 @@
+const CACHE_NAME = 'timetable-v1.0.0'; 
+// オフラインで使いたいファイルの一覧
+const urlsToCache = [
+  './', 
+  './index.html',
+  './manifest.json',
+  // Luxonライブラリ（時刻計算に必要）
+  'https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js', 
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  
+  // 🔽🔽🔽 あなたの背景画像ファイルをすべて追加してください 🔽🔽🔽
+  './images/メモロビ.png', 
+  './images/メモ2.png', 
+  './images/アグライア.jpg', 
+  './images/アナクサゴラス.jpg', 
+  './images/アベンチュリン.jpg', 
+  './images/キャストリス.jpg', 
+  './images/キュレネ.jpg', 
+  './images/セファリア.jpg', 
+  './images/トリビー.jpg', 
+  './images/ヒアンシンシア.jpg', 
+  './images/ファイノン.jpg', 
+  './images/マダムヘルタ.jpg', 
+  './images/モーディス.jpg', 
+  // 🔼🔼🔼 該当するファイル名をすべて追加してください 🔼🔼🔼
+];
+
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(urlsToCache);
+    })
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    caches.match(event.request).then((response) => {
+      if (response) {
+        return response; // キャッシュにあれば返す
+      }
+      return fetch(event.request); // なければネットワークから取得
+    })
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  const cacheWhitelist = [CACHE_NAME];
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheWhitelist.indexOf(cacheName) === -1) {
+            return caches.delete(cacheName); // 古いキャッシュを削除
+          }
+        })
+      );
+    })
+  );
+});
